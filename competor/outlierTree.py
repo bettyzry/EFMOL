@@ -5,24 +5,34 @@ from evaluation import evaluation
 def run_outlierTree(df, outliers_print=10):
     outliers_model = OutlierTree()
     outliers_df = outliers_model.fit(df, outliers_print=outliers_print, return_outliers=True)
-    print(outliers_df)
     results = outliers_df['suspicious_value'].values
     predict = [result['column'] if len(result) > 0 else 'None' for result in results]
     y_pre = pd.DataFrame(predict, columns=['reason'])
     return y_pre
 
+def test():
+    path = '../data/reason'
+    # out = open('../out/outlierTree.csv', 'w')
+    # out.write('name, correct, per\n')
+    # out.close()
+    for _, _, files in os.walk(path):  # root 根目录，dirs 子目录
+        for filename in files:
+            if str(filename)[-4:] == '.csv' and str(filename)[:1] == 'c':
+                filepath = path + "/" + str(filename)
+                df_true = pd.read_csv(filepath)
+                df = df_true.drop(['label', 'reason'], axis=1)
+                for i in range(10):
+                    df_pre = run_outlierTree(df)   # 只有待判断属性列
+                    evaluation(df_true, df_pre, outpath='../out/outlierTree', name=filename[:-4])
 
+def show_outlierTree():
+    filepath = 'data/reason/cardio_reason0.2.csv'
+    df_true = pd.read_csv(filepath)
+    df = df_true.drop(['label', 'reason'], axis=1)
+    df_pre = run_outlierTree(df)  # 只有待判断属性列
+    evaluation(df_true, df_pre, outpath='../out/outlierTree', name='cardio')
+
+import os
 if __name__ == '__main__':
-    df1 = pd.read_csv('../data/cardio_reason.csv',
-                     usecols=['A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A11', 'A12', 'A13', 'A14',
-                              'A15', 'A16', 'A17', 'A18', 'A19', 'A20'])
-    df2 = pd.read_csv('../data/cardio_reason.csv')
-    outliers_printlist = [10, 20, 40, 80, 160]
-    for i in range(10):
-        out = open('../out/all' + str(i) + '.csv', 'w')
-        out.write('outliers_print, d, correct, per\n')
-        out.close()
-        for outliers_print in outliers_printlist:
-            y_pre = run_outlierTree(df1)
-            evaluation(df2, y_pre, i, tree=outliers_print)
+    show_outlierTree()
 

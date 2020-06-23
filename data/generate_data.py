@@ -17,7 +17,7 @@ def add_reason(df, num):
     for i in range(outlier):
         y_true[i] = 1
         loc = random.randint(0, len(column_feature)-1)
-        a = 1 + num + random.random()
+        a = 1 + num
         reason[i] = column_feature[loc]
         data[i][loc] = _avg_[loc] * a
     df = pd.DataFrame(data, columns=column_feature)
@@ -27,10 +27,16 @@ def add_reason(df, num):
     df = df.reset_index(drop=True)
     return df
 
+import os
 if __name__ == '__main__':
-    path = 'cardio.csv'
-    df = pd.read_csv(path, engine='python')
-    for i in range(2, 10, 2):
-        path_out = 'cardio_reason' + str(i/10) + '.csv'
-        reason_df = add_reason(df, i/10)
-        reason_df.to_csv(path_out)
+    path = "../data/csv"
+    for _, _, files in os.walk(path):  # root 根目录，dirs 子目录
+        for filename in files:
+            if str(filename)[-4:] == '.csv':
+            # if str(filename) == 'cardio.csv':
+                filepath = path + "/" + str(filename)
+                df = pd.read_csv(filepath, engine='python')
+                for i in range(2, 10, 2):
+                    path_out = '../data/reason/' + filename[:-4] + '_reason' + str(i/10) + '.csv'
+                    reason_df = add_reason(df, i/10)
+                    reason_df.to_csv(path_out, index=False)

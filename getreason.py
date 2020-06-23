@@ -1,4 +1,5 @@
 from iForestVis import *
+from evaluation import evaluation
 import time
 # c_time = str(time.strftime('%Y%m%d %H.%M.%S-', time.localtime(time.time())))
 c_time = ''
@@ -56,93 +57,67 @@ def zry_iforest_depth_table(iforest, x):
     depth_df = pd.DataFrame(depth_table, index=np.arange(n_sample), columns=columns_tree)
     return depth_df, score_table
 
-def getreason(df):
+def getreason(df, n_estimators=300, max_samples=1024):
     x = df.values
-    reason_true = x[:, -1]
-    y_true = x[:, -2]
-    x = x[:, 1:-2]
     n_sample = x.shape[0]
     n_feature = x.shape[1]
-    columns_feature = df.columns.tolist()[1:n_feature+1]
-    iforest, if_scores, if_outlier_index = do_iforest(x, n_estimators=tree, max_samples=d)
-    xt_depth, xtf_depth = zry_iforest_depth_table(iforest, x)
-    # depth 归一
-    norm_depth = xt_depth.div(xt_depth.sum(axis=1), axis=0)
-    norm_depth = norm_depth.fillna(0)
-    norm_depth = norm_depth.values
-    xf_score = np.ones([n_sample, n_feature]) * 0
-    for i in range(n_sample):
-        xf_score[i] = np.dot(np.array(norm_depth[i]), np.array(xtf_depth[i]))
-    max_index = np.argmax(xf_score, axis=1)
-    max_feature = np.array(columns_feature)[max_index]
-    index = [i for i in range(len(xf_score))]
+    columns_feature = df.columns.tolist()[:n_feature]
 
-    result = pd.DataFrame(xf_score, index=index, columns=columns_feature)
-    result['reason'] = max_feature
-    return result
-
-def evaluation(df, result, i):
-    x = df.values[:, 1:-2]
-    n_feature = x.shape[1]
-    columns_feature = df.columns.tolist()[1:n_feature]
-    reason_true = df['reason'].values
-    reason_pre = result['reason'].values
-    index = np.where(reason_true != '0')[0]
-    reason_true = reason_true[index]
-    reason_pre = reason_pre[index]
-
-    count = 0
-    # count = np.zeros(len(columns_feature))
-    for j in range(len(reason_true)):
-        if reason_pre[j] == reason_true[j]:
-            count += 1
-    # print(count, len(index), count/len(index))
-    out = open('out/all' + str(i) + '.csv', 'a')
-    out.write(str(tree) + ','+ str(d) + ',' + str(count) + ',' + str(count/len(index)) + '\n')
-    out.close()
-
-    # from sklearn.metrics import confusion_matrix  # 生成混淆矩阵函数
-    # cm = confusion_matrix(reason_true, reason_pre)
-    # print(cm)
-    # plot_confusion_matrix(cm, columns_feature)
-    # print(columns_feature)
+    chunk = 3000
+    final_result = pd.DataFrame()
+    for j in range(0, len(df), chunk):
+        data = x[j: min(j+chunk, len(df))]
+        n_sample = data.shape[0]
+        iforest, if_scores, if_outlier_index = do_iforest(data, n_estimators=300, max_samples=1024)
+        xt_depth, xtf_depth = zry_iforest_depth_table(iforest, data)
+        # depth 归一
+        norm_depth = xt_depth.div(xt_depth.sum(axis=1), axis=0)
+        norm_depth = norm_depth.fillna(0)
+        norm_depth = norm_depth.values
+        xf_score = np.ones([n_sample, n_feature]) * 0
+        for i in range(n_sample):
+            xf_score[i] = np.dot(np.array(norm_depth[i]), np.array(xtf_depth[i]))
+        max_index = np.argmax(xf_score, axis=1)
+        max_feature = np.array(columns_feature)[max_index]
+        index = [i for i in range(len(xf_score))]
+        result = pd.DataFrame(xf_score, index=index, columns=columns_feature)
+        result['reason'] = max_feature
+        final_result = final_result.append(result)
+    final_result = final_result.reset_index(drop=True)
+    print(len(final_result))
+    return final_result
 
 
-def plot_confusion_matrix(cm, labels_name, title='Confusion Matrix'):
-    # cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]    # 归一化
-    # plt.imshow(cm, interpolation='nearest')    # 在特定的窗口上显示图像
-    # plt.title(title)    # 图像标题
-    # plt.colorbar()
-    # num_local = np.array(range(len(labels_name)))
-    # plt.xticks(num_local, labels_name, rotation=90)    # 将标签印在x轴坐标上
-    # plt.yticks(num_local, labels_name)    # 将标签印在y轴坐标上
-    # plt.ylabel('True label')
-    # plt.xlabel('Predicted label')
-    ax = sns.heatmap(cm, annot=True)
-    plt.title('N=' + str(d))  # 图像标题
-    plt.savefig('out/confusionMatrix' + message + '.png')
-    # plt.show()
-    plt.close()
-    return
+def test():
+    path = 'data/reason'
+    # out = open('out/2EFMOL.csv', 'w')
+    # out.write('name, correct, per\n')
+    # out.close()
+    for _, _, files in os.walk(path):  # root 根目录，dirs 子目录
+        for filename in files:
+            # if str(filename)[-4:] == '.csv':
+            if str(filename)[-4:] == '.csv' and str(filename)[:1] == 'c':
+                filepath = path + "/" + str(filename)
+                df_true = pd.read_csv(filepath)
+                df = df_true.drop(['label', 'reason'], axis=1)
+                for i in range(10):
+                    df_pre = getreason(df)   # 只有待判断属性列
+                    evaluation(df_true, df_pre, outpath='out/2EFMOL', name=filename[:-4])
 
-import seaborn as sns
-import time
-from max_n_index import *
+
+def show_efmol():
+    n_estimators = 300
+    max_samples = 1024
+    dataset = 'cardio_reason0.2'
+
+    filepath = 'data/reason/' + dataset + '.csv'
+    df_true = pd.read_csv(filepath)
+    df = df_true.drop(['label', 'reason'], axis=1)
+    df_pre = getreason(df, n_estimators, max_samples)  # 只有待判断属性列
+    evaluation(df_true, df_pre, outpath='out/EFMOL', name=dataset)
+
+
 if __name__ == '__main__':
-    tree_list = [50, 100, 150, 200, 250, 300]
-    # tree_list = [300]
-    d_list = [256, 512, 1024]
+    show_efmol()
 
-    i = 0
-    path = 'D:/0学习/0数据集/多维/cardio_reason.csv'
-    df = pd.read_csv(path, engine='python')
-    for i in range(10):
-        out = open('out/all' + str(i) +'.csv', 'w')
-        out.write('tree, d, correct, per\n')
-        out.close()
-        for d in d_list:
-            for tree in tree_list:
-                message = str(tree) + '-' + str(d)
-                result = getreason(df)
-                # result.to_csv('out/result' + str(c_time) + message + '.csv')
-                evaluation(df, result, i)
+
